@@ -17,6 +17,17 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// 🛠 데이터베이스 컬럼 자동 동기화 함수
+async function ensureDatabaseColumns() {
+  try {
+    await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS winner_target_scores INT[] DEFAULT ARRAY[]::INT[];`);
+    await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_target_scores INT[] DEFAULT ARRAY[]::INT[];`);
+    console.log('✅ 데이터베이스 스키마 자동 동기화 완료');
+  } catch (err) {
+    console.error('⚠️ 스키마 자동 동기화 중 오류 발생:', err.message);
+  }
+}
+
 const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
 console.log('📁 정적 파일 경로:', frontendDistPath);
 app.use(express.static(frontendDistPath));
@@ -62,7 +73,7 @@ app.post('/api/:university_code/players', async (req, res) => {
   }
 });
 
-// 3. 전적 기록 추가 (개별 선수별 목표 점수 포함)
+// 3. 전적 기록 추가
 app.post('/api/:university_code/matches', async (req, res) => {
   const { university_code } = req.params;
   const { winner_ids, loser_ids, game_type, match_format, match_type, winner_target_scores, loser_target_scores, password } = req.body;
@@ -252,7 +263,7 @@ app.get('/api/:university_code/matches', async (req, res) => {
   }
 });
 
-// 6. 상대 전적 조회 API (몇 전 몇 승 몇 패 및 당시 점수 포함)
+// 6. 상대 전적 조회 API
 app.get('/api/:university_code/head-to-head', async (req, res) => {
   const { university_code } = req.params;
   const { p1, p2 } = req.query;
@@ -317,4 +328,10 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
-app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
+// 🚀 데이터베이스 테이블 생성이 끝난 후에만 서버가 요청을 받도록 설정 (핵심 수정)
+async function startServer() {
+  await ensureDatabaseColumns();
+  app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
+}
+
+startServer();
