@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>당구 전적판</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/variable/pretendardvariable.css" />
+    <style>
+        :root {
+            /* 라이트 모드 (기본) */
+            --bg-color: #F2F4F6;
+            --card-bg: #FFFFFF;
+            --text-primary: #191F28;
+            --text-secondary: #8B95A1;
+            --primary-blue: #3182F6;
+            --primary-red: #F04452;
+            --input-bg: #F2F4F6;
+            --border-color: #f2f4f6;
+            --match-box-bg: #F9FAFB;
+            --match-box-border: #E5E8EB;
+            --vs-color: #D1D6DB;
+            --nav-bg: rgba(255, 255, 255, 0.9);
+            --nav-shadow: rgba(0, 0, 0, 0.05);
+            --border-radius: 16px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* 다크 모드 */
+                --bg-color: #121212;
+                --card-bg: #1C1C1E;
+                --text-primary: #FFFFFF;
+                --text-secondary: #999999;
+                --primary-blue: #3B82F6;
+                --primary-red: #EF4444;
+                --input-bg: #2C2C2E;
+                --border-color: #38383A;
+                --match-box-bg: #1A1A1C;
+                --match-box-border: #38383A;
+                --vs-color: #555555;
+                --nav-bg: rgba(28, 28, 30, 0.9);
+                --nav-shadow: rgba(255, 255, 255, 0.05);
+            }
+        }
+
+        body { 
+            font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-primary); 
+            margin: 0; 
+            padding: 0;
+            padding-bottom: 80px;
+        }
+        
+        .app-container { max-width: 480px; margin: 0 auto; background-color: var(--bg-color); min-height: 100vh; position: relative; }
+
+        .header { padding: 24px 20px 10px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
+        .back-btn { color: var(--text-secondary); text-decoration: none; font-size: 14px; font-weight: 500; }
+
+        .card { background: var(--card-bg); border-radius: var(--border-radius); padding: 24px; margin: 16px 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
+        .card h3 { margin: 0 0 20px 0; font-size: 18px; font-weight: 700; }
+        
+        input, select { 
+            background-color: var(--input-bg); border: none; border-radius: 12px; 
+            padding: 16px; font-size: 15px; width: 100%; box-sizing: border-box; 
+            font-family: inherit; color: var(--text-primary); outline: none; margin-bottom: 16px;
+        }
+        button { 
+            background-color: var(--primary-blue); color: white; border: none; border-radius: 12px; 
+            padding: 16px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; 
+            transition: background-color 0.2s;
+        }
+        button:active { background-color: #1b64da; }
+        button.outline { background-color: transparent; border: 1px solid var(--primary-blue); color: var(--primary-blue); }
+
+        .match-input-container { 
+            display: flex; align-items: center; justify-content: space-between; 
+            background: var(--match-box-bg); padding: 16px; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--match-box-border);
+        }
+        .player-select { flex: 1; display: flex; flex-direction: column; text-align: center; }
+        .player-select .label { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+        .winner-label { color: var(--primary-blue); }
+        .loser-label { color: var(--primary-red); }
+        .player-select select { padding: 12px; font-size: 14px; margin-bottom: 0; text-align: center; }
+        .vs-badge { font-weight: 800; color: var(--vs-color); font-size: 14px; padding: 0 12px; margin-top: 24px; }
+        
+        .input-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; margin-left: 4px; }
+
+        .bottom-nav { 
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); 
+            width: 100%; max-width: 480px; background: var(--nav-bg); 
+            backdrop-filter: blur(10px); display: flex; justify-content: space-around; 
+            padding: 12px 0 20px 0; box-shadow: 0 -1px 0 var(--nav-shadow); z-index: 100;
+        }
+        .nav-item { text-align: center; color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: pointer; flex: 1; }
+        .nav-item.active { color: var(--text-primary); }
+        .nav-icon { font-size: 24px; margin-bottom: 4px; display: block; opacity: 0.4; }
+        .nav-item.active .nav-icon { opacity: 1; }
+
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .list-row { display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
+        .list-row:last-child { border-bottom: none; }
+        .rank-num { font-size: 16px; font-weight: 700; width: 30px; color: var(--text-secondary); }
+        .rank-num.top1 { color: #F5A623; } .rank-num.top2 { color: #A0A5AA; } .rank-num.top3 { color: #C28F5B; }
+        .player-info { flex: 1; }
+        .player-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .player-stats { font-size: 13px; color: var(--text-secondary); }
+        .player-score { font-size: 18px; font-weight: 700; color: var(--primary-blue); }
+        
+        .match-info { flex: 1; }
+        .match-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .match-winner { color: var(--primary-blue); }
+        .match-loser { color: var(--primary-red); }
+        .match-date { font-size: 12px; color: var(--text-secondary); }
+        
+        #toast { 
+            visibility: hidden; min-width: 200px; background-color: #333; color: #fff; 
+            text-align: center; border-radius: 20px; padding: 12px 24px; font-size: 14px;
+            position: fixed; z-index: 1000; left: 50%; bottom: 90px; transform: translateX(-50%);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transition: opacity 0.3s, bottom 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 100px; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1 id="uniTitle">당구 전적판</h1>
+            <a href="/" class="back-btn">학교 변경</a>
+        </div>
+
+        <div id="tab-home" class="tab-content active">
+            <div class="card">
+                <h3>⚔️ 경기 결과 기록</h3>
+                <div class="match-input-container">
+                    <div class="player-select">
+                        <span class="label winner-label">👑 승리 선수</span>
+                        <select id="winnerSelect"><option value="">선택</option></select>
+                    </div>
+                    <div class="vs-badge">VS</div>
+                    <div class="player-select">
+                        <span class="label loser-label">💀 패배 선수</span>
+                        <select id="loserSelect"><option value="">선택</option></select>
+                    </div>
+                </div>
+
+                <span class="input-label">게임 종목</span>
+                <select id="gameType">
+                    <option value="4구">4구 (기본)</option>
+                    <option value="3쿠션">3쿠션</option>
+                    <option value="포켓볼">포켓볼</option>
+                </select>
+
+                <span class="input-label">기록용 비밀번호</span>
+                <input type="password" id="matchPassword" placeholder="학교 공용 비밀번호 (기본: 1234)">
+                
+                <button onclick="recordMatch()">결과 저장하기</button>
+            </div>
+
+            <div class="card">
+                <h3>👤 선수 등록</h3>
+                <span class="input-label">이름 입력</span>
+                <input type="text" id="newPlayerName" placeholder="선수 이름을 입력하세요">
+                <button class="outline" onclick="registerPlayer()">등록하기</button>
+            </div>
+        </div>
+
+        <div id="tab-ranking" class="tab-content">
+            <div class="card">
+                <h3>🏆 명예의 전당</h3>
+                <div id="rankingList"></div>
+            </div>
+        </div>
+
+        <div id="tab-history" class="tab-content">
+            <div class="card">
+                <h3>📜 최근 경기 타임라인</h3>
+                <div id="matchList"></div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('tab-home', this)">
+                <span class="nav-icon">🏠</span>홈
+            </div>
+            <div class="nav-item" onclick="switchTab('tab-ranking', this)">
+                <span class="nav-icon">🏆</span>랭킹
+            </div>
+            <div class="nav-item" onclick="switchTab('tab-history', this)">
+                <span class="nav-icon">🕒</span>기록
+            </div>
+        </nav>
+
+        <div id="toast">메시지</div>
+    </div>
+
+    <script>
+        const uniNames = { 'kmou': '한국해양대', 'dmu': '동양미래대', 'yuhan': '유한대', 'dankook': '단국대', 'cbnu': '충북대' };
+        const urlParams = new URLSearchParams(window.location.search);
+        const uniCode = urlParams.get('uni');
+
+        if (uniCode && uniNames[uniCode]) {
+            document.getElementById('uniTitle').innerText = uniNames[uniCode] + ' 전적판';
+            loadPlayers();
+            loadMatches();
+        } else {
+            alert('잘못된 접근입니다.');
+            window.location.href = '/';
+        }
+
+        function switchTab(tabId, el) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            el.classList.add('active');
+            
+            if(tabId === 'tab-ranking') loadPlayers();
+            if(tabId === 'tab-history') loadMatches();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.className = "show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        async function loadPlayers() {
+            try {
+                const res = await fetch(`/api/${uniCode}/players`);
+                const data = await res.json();
+                if (data.success) {
+                    updatePlayerSelects(data.players);
+                    updateRankingList(data.players);
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadMatches() {
+            try {
+                const res = await fetch(`/api/${uniCode}/matches`);
+                const data = await res.json();
+                if (data.success) updateMatchList(data.matches);
+            } catch (err) { console.error(err); }
+        }
+
+        async function registerPlayer() {
+            const name = document.getElementById('newPlayerName').value.trim();
+            if (!name) return showToast('이름을 입력해주세요.');
+
+            try {
+                const res = await fetch(`/api/${uniCode}/players`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('newPlayerName').value = '';
+                    loadPlayers();
+                    showToast(`${name} 선수 등록 완료!`);
+                } else { showToast(data.error); }
+            } catch (err) { showToast('서버 통신 오류'); }
+        }
+
+        async function recordMatch() {
+            const winner_id = document.getElementById('winnerSelect').value;
+            const loser_id = document.getElementById('loserSelect').value;
+            const game_type = document.getElementById('gameType').value;
+            const password = document.getElementById('matchPassword').value;
+
+            if (!winner_id || !loser_id || !password) return showToast('빈칸을 모두 채워주세요.');
+            if (winner_id === loser_id) return showToast('승자와 패자는 같을 수 없습니다.');
+
+            try {
+                const res = await fetch(`/api/${uniCode}/matches`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ winner_id, loser_id, game_type, password })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('matchPassword').value = '';
+                    document.getElementById('winnerSelect').value = '';
+                    document.getElementById('loserSelect').value = '';
+                    loadPlayers();
+                    loadMatches();
+                    showToast('경기 결과가 저장되었습니다! 🏆');
+                } else { showToast(data.error); }
+            } catch (err) { showToast('서버 통신 오류'); }
+        }
+
+        function updatePlayerSelects(players) {
+            const wSelect = document.getElementById('winnerSelect');
+            const lSelect = document.getElementById('loserSelect');
+            let html = '<option value="">선수 선택</option>';
+            [...players].sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+                html += `<option value="${p.id}">${p.name}</option>`;
+            });
+            wSelect.innerHTML = html;
+            lSelect.innerHTML = html;
+        }
+
+        function updateRankingList(players) {
+            const list = document.getElementById('rankingList');
+            if (players.length === 0) return list.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding: 20px 0;">등록된 선수가 없습니다.</p>';
+
+            list.innerHTML = players.map((p, i) => {
+                const winRate = (p.wins + p.losses) > 0 ? Math.round((p.wins / (p.wins + p.losses)) * 100) : 0;
+                let rankClass = i === 0 ? 'top1' : (i === 1 ? 'top2' : (i === 2 ? 'top3' : ''));
+                return `
+                    <div class="list-row">
+                        <div class="rank-num ${rankClass}">${i + 1}</div>
+                        <div class="player-info">
+                            <div class="player-name">${p.name}</div>
+                            <div class="player-stats">${p.wins}승 ${p.losses}패 (승률 ${winRate}%)</div>
+                        </div>
+                        <div class="player-score">${p.score}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateMatchList(matches) {
+            const list = document.getElementById('matchList');
+            if (matches.length === 0) return list.innerHTML = '<p style="text-align:center; color:var(--text-secondary); padding: 20px 0;">최근 기록이 없습니다.</p>';
+
+            list.innerHTML = matches.map(m => {
+                const d = new Date(m.match_date);
+                const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                return `
+                    <div class="list-row">
+                        <div class="match-info">
+                            <div class="match-title">
+                                <span class="match-winner">${m.winner_name}</span> 승 <span style="color:var(--vs-color); font-size:12px; margin:0 4px;">vs</span> <span class="match-loser">${m.loser_name}</span> 패
+                            </div>
+                            <div class="match-date">${dateStr} · ${m.game_type}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
