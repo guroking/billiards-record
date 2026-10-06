@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
-const path = require('path');
+const path = require('path'); // 👈 이 부분이 반드시 있어야 합니다!
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -16,6 +16,11 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+
+// 📁 프론트엔드 정적 파일 경로 연결 (이 코드가 핵심입니다!)
+const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
+console.log('📁 정적 파일 경로:', frontendDistPath);
+app.use(express.static(frontendDistPath));
 
 async function verifyPassword(university_code, plainPassword) {
   const result = await pool.query('SELECT shared_password FROM universities WHERE code = $1', [university_code]);
@@ -291,8 +296,9 @@ app.get('/api/:university_code/head-to-head', async (req, res) => {
   }
 });
 
+// 🔄 어떤 URL로 들어와도 React(index.html)를 반환하도록 맨 아래에 배치
 app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
 app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
