@@ -11,21 +11,19 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.set('trust proxy', true);
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// 공통 함수: 대학교 비밀번호 검증
 async function verifyPassword(university_code, plainPassword) {
   const result = await pool.query('SELECT shared_password FROM universities WHERE code = $1', [university_code]);
   if (result.rows.length === 0) return false;
   return await bcrypt.compare(plainPassword, result.rows[0].shared_password);
 }
 
-// 1. 선수 목록 불러오기 (수지 포함)
+// 1. 선수 목록 불러오기
 app.get('/api/:university_code/players', async (req, res) => {
   const { university_code } = req.params;
   try {
@@ -40,10 +38,10 @@ app.get('/api/:university_code/players', async (req, res) => {
   }
 });
 
-// 2. 새로운 선수 등록 (수지 선택 입력)
+// 2. 새로운 선수 등록
 app.post('/api/:university_code/players', async (req, res) => {
   const { university_code } = req.params;
-  const { name, handicap } = req.body; // handicap은 없으면 null
+  const { name, handicap } = req.body;
 
   try {
     const result = await pool.query(
@@ -60,36 +58,32 @@ app.post('/api/:university_code/players', async (req, res) => {
   }
 });
 
-// 3. 전적 기록 추가 (다인전 배열 및 경기타입 완벽 지원)
+// 3. 전적 기록 추가 (개별 점수 포함)
 app.post('/api/:university_code/matches', async (req, res) => {
   const { university_code } = req.params;
-  const { winner_ids, loser_ids, game_type, match_format, match_type, password } = req.body;
+  const { winner_ids, loser_ids, game_type, match_format, match_type, winner_scores, loser_scores, password } = req.body;
   const ip_address = req.ip;
   const user_agent = req.headers['user-agent'];
 
-  // 승자와 패자 중복 확인
-  const hasOverlap = winner_ids.some(id => loser_ids.includes(id));
+  const hasOverlap = winner_ids.some((id: any) => loser_ids.includes(id));
   if (hasOverlap) return res.status(400).json({ success: false, error: '승자와 패자에 같은 선수가 들어갈 수 없습니다.' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 비밀번호 확인
-    const isMatch = await verifyPassword(university_code, password);
+    const isMatch = await verifyPassword(university_code, password || '1234');
     if (!isMatch) throw new Error('WRONG_PASSWORD');
 
     let elo_change = 0;
-
-    // 점수(Elo) 계산은 오직 1:1 && 승급전 일 때만 작동
     if (match_format === '1:1' && match_type === '승급전') {
       const wId = winner_ids[0];
       const lId = loser_ids[0];
-
+      
       const playersRes = await client.query('SELECT id, score FROM players WHERE id = ANY($1::int[])', [[wId, lId]]);
       const winner = playersRes.rows.find(p => p.id === wId);
       const loser = playersRes.rows.find(p => p.id === lId);
-
+      
       if (!winner || !loser) throw new Error('PLAYER_NOT_FOUND');
 
       const K = 32;
@@ -97,29 +91,19 @@ app.post('/api/:university_code/matches', async (req, res) => {
       elo_change = Math.round(K * (1 - expectedWinner));
     }
 
-    // 승자들 업데이트 (점수 증가 및 승수 추가)
-    await client.query(
-      'UPDATE players SET score = score + $1, wins = wins + 1 WHERE id = ANY($2::int[])',
-      [elo_change, winner_ids]
-    );
+    await client.query('UPDATE players SET score = score + $1, wins = wins + 1 WHERE id = ANY($2::int[])', [elo_change, winner_ids]);
+    await client.query('UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])', [elo_change, loser_ids]);
 
-    // 패자들 업데이트 (점수 차감 및 패수 추가)
     await client.query(
-      'UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])',
-      [elo_change, loser_ids]
-    );
-
-    // 매치 기록 추가 (배열로 저장)
-    await client.query(
-      `INSERT INTO matches (university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, ip_address, user_agent) 
-       VALUES ($1, $2, $3, $4, $5::int[], $6::int[], $7, $8, $9)`,
-      [university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, ip_address, user_agent]
+      `INSERT INTO matches (university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_scores, loser_scores, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4, $5::int[], $6::int[], $7, $8::int[], $9::int[], $10, $11)`,
+      [university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_scores || [], loser_scores || [], ip_address, user_agent]
     );
 
     await client.query('COMMIT');
     res.json({ success: true, message: '전적이 성공적으로 기록되었습니다.' });
 
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     console.error(err);
     if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
@@ -130,7 +114,7 @@ app.post('/api/:university_code/matches', async (req, res) => {
   }
 });
 
-// 4. 최근 전적 취소 (Soft Delete 및 점수/승률 롤백)
+// 4. 최근 전적 취소 (Soft Delete)
 app.delete('/api/:university_code/matches/:id', async (req, res) => {
   const { university_code, id } = req.params;
   const { password } = req.body;
@@ -138,29 +122,25 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
+    
     const isMatch = await verifyPassword(university_code, password);
     if (!isMatch) throw new Error('WRONG_PASSWORD');
 
     const matchRes = await client.query(
-      `SELECT * FROM matches 
-       WHERE id = $1 AND university_code = $2 AND is_deleted = FALSE 
-       AND match_date >= NOW() - INTERVAL '10 minutes'`,
+      `SELECT * FROM matches WHERE id = $1 AND university_code = $2 AND is_deleted = FALSE AND match_date >= NOW() - INTERVAL '10 minutes'`,
       [id, university_code]
     );
 
     if (matchRes.rows.length === 0) throw new Error('CANNOT_UNDO');
     const match = matchRes.rows[0];
 
-    // 배열 형태의 승자/패자 기록을 원상복구
     await client.query('UPDATE players SET score = score - $1, wins = wins - 1 WHERE id = ANY($2::int[])', [match.elo_change, match.winner_ids]);
     await client.query('UPDATE players SET score = score + $1, losses = losses - 1 WHERE id = ANY($2::int[])', [match.elo_change, match.loser_ids]);
-
     await client.query('UPDATE matches SET is_deleted = TRUE WHERE id = $1', [id]);
 
     await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
     if (err.message === 'CANNOT_UNDO') return res.status(400).json({ success: false, error: '취소 기한(10분)이 지났거나 없는 기록입니다.' });
@@ -170,43 +150,144 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
   }
 });
 
-// 5. 최근 전적 조회 (선수 매핑을 위한 최적화)
+// 4-1. 전적 수정 (10분 이내)
+app.put('/api/:university_code/matches/:id', async (req, res) => {
+  const { university_code, id } = req.params;
+  const { winner_ids, loser_ids, game_type, match_format, match_type, winner_scores, loser_scores, password } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const isMatch = await verifyPassword(university_code, password || '1234');
+    if (!isMatch) throw new Error('WRONG_PASSWORD');
+
+    const matchRes = await client.query(
+      `SELECT * FROM matches WHERE id = $1 AND university_code = $2 AND is_deleted = FALSE AND match_date >= NOW() - INTERVAL '10 minutes'`,
+      [id, university_code]
+    );
+    if (matchRes.rows.length === 0) throw new Error('CANNOT_EDIT');
+    const oldMatch = matchRes.rows[0];
+
+    // 기존 결과 롤백
+    await client.query('UPDATE players SET score = score - $1, wins = wins - 1 WHERE id = ANY($2::int[])', [oldMatch.elo_change, oldMatch.winner_ids]);
+    await client.query('UPDATE players SET score = score + $1, losses = losses - 1 WHERE id = ANY($2::int[])', [oldMatch.elo_change, oldMatch.loser_ids]);
+
+    // 새로운 Elo 계산
+    let elo_change = 0;
+    if (match_format === '1:1' && match_type === '승급전') {
+      const wId = winner_ids[0];
+      const lId = loser_ids[0];
+      const playersRes = await client.query('SELECT id, score FROM players WHERE id = ANY($1::int[])', [[wId, lId]]);
+      const winner = playersRes.rows.find(p => p.id === wId);
+      const loser = playersRes.rows.find(p => p.id === lId);
+      if (winner && loser) {
+        const K = 32;
+        const expectedWinner = 1 / (1 + Math.pow(10, (loser.score - winner.score) / 400));
+        elo_change = Math.round(K * (1 - expectedWinner));
+      }
+    }
+
+    // 새로운 결과 반영
+    await client.query('UPDATE players SET score = score + $1, wins = wins + 1 WHERE id = ANY($2::int[])', [elo_change, winner_ids]);
+    await client.query('UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])', [elo_change, loser_ids]);
+
+    await client.query(
+      `UPDATE matches SET game_type = $1, match_format = $2, match_type = $3, winner_ids = $4::int[], loser_ids = $5::int[], elo_change = $6, winner_scores = $7::int[], loser_scores = $8::int[] WHERE id = $9`,
+      [game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_scores || [], loser_scores || [], id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
+    if (err.message === 'CANNOT_EDIT') return res.status(400).json({ success: false, error: '수정 기한(10분)이 지났거나 없는 기록입니다.' });
+    res.status(500).json({ success: false, error: '수정 실패' });
+  } finally {
+    client.release();
+  }
+});
+
+// 5. 최근 전적 조회
 app.get('/api/:university_code/matches', async (req, res) => {
   const { university_code } = req.params;
   try {
-    // 1) 최근 매치 50개 조회
     const matchRes = await pool.query(
-      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, match_date
+      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_scores, loser_scores, match_date
        FROM matches WHERE university_code = $1 AND is_deleted = FALSE
        ORDER BY match_date DESC LIMIT 50`,
       [university_code]
     );
-
-    // 2) 매치에 이름(이름, 수지)을 매핑하기 위해 해당 대학의 모든 선수 조회
+    
     const playerRes = await pool.query(
       `SELECT id, name, billiard_handicap FROM players WHERE university_code = $1`,
       [university_code]
     );
-
-    const playerMap = {};
+    
+    const playerMap: Record<number, string> = {};
     playerRes.rows.forEach(p => {
-      // 수지가 있으면 '이름 (수지)' 형태로 매핑
       playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
     });
 
-    // 3) ID 배열을 이름 문자열 배열로 변환
-    const matchesWithNames = matchRes.rows.map(m => {
-      return {
-        ...m,
-        winner_names: m.winner_ids.map(id => playerMap[id] || '알수없음'),
-        loser_names: m.loser_ids.map(id => playerMap[id] || '알수없음')
-      };
-    });
+    const matchesWithDetails = matchRes.rows.map(m => ({
+      ...m,
+      winners: m.winner_ids.map((id: number, idx: number) => ({
+        name: playerMap[id] || '알수없음',
+        score: m.winner_scores?.[idx] ?? null
+      })),
+      losers: m.loser_ids.map((id: number, idx: number) => ({
+        name: playerMap[id] || '알수없음',
+        score: m.loser_scores?.[idx] ?? null
+      }))
+    }));
 
-    res.json({ success: true, matches: matchesWithNames });
+    res.json({ success: true, matches: matchesWithDetails });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: '전적을 불러오지 못했습니다.' });
+  }
+});
+
+// 6. 상대 전적 조회 API
+app.get('/api/:university_code/head-to-head', async (req, res) => {
+  const { university_code } = req.params;
+  const { p1, p2 } = req.query;
+  try {
+    const matchRes = await pool.query(
+      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_scores, loser_scores, match_date
+       FROM matches 
+       WHERE university_code = $1 AND is_deleted = FALSE 
+       AND (
+         (winner_ids @> ARRAY[$2::int] AND loser_ids @> ARRAY[$3::int]) OR 
+         (winner_ids @> ARRAY[$3::int] AND loser_ids @> ARRAY[$2::int])
+       )
+       ORDER BY match_date DESC`,
+      [university_code, p1, p2]
+    );
+
+    const playerRes = await pool.query(`SELECT id, name, billiard_handicap FROM players WHERE university_code = $1`, [university_code]);
+    const playerMap: Record<number, string> = {};
+    playerRes.rows.forEach(p => {
+      playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
+    });
+
+    const records = matchRes.rows.map(m => ({
+      ...m,
+      winners: m.winner_ids.map((id: number, idx: number) => ({
+        name: playerMap[id] || '알수없음',
+        score: m.winner_scores?.[idx] ?? null
+      })),
+      losers: m.loser_ids.map((id: number, idx: number) => ({
+        name: playerMap[id] || '알수없음',
+        score: m.loser_scores?.[idx] ?? null
+      }))
+    }));
+
+    res.json({ success: true, records });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: '상대 전적을 불러오지 못했습니다.' });
   }
 });
 
