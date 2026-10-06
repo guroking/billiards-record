@@ -65,7 +65,7 @@ app.post('/api/:university_code/matches', async (req, res) => {
   const ip_address = req.ip;
   const user_agent = req.headers['user-agent'];
 
-  const hasOverlap = winner_ids.some((id: any) => loser_ids.includes(id));
+  const hasOverlap = winner_ids.some(id => loser_ids.includes(id));
   if (hasOverlap) return res.status(400).json({ success: false, error: '승자와 패자에 같은 선수가 들어갈 수 없습니다.' });
 
   const client = await pool.connect();
