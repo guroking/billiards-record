@@ -19,18 +19,29 @@ interface Player {
   losses: number;
 }
 
+interface PlayerDetail {
+  id: number;
+  name: string;
+  target_score: number | null;
+}
+
 interface Match {
   id: number;
   winner_ids: number[];
   loser_ids: number[];
-  winner_names: string[];
-  loser_names: string[];
+  winners: PlayerDetail[];
+  losers: PlayerDetail[];
   match_date: string;
   game_type: string;
   match_format: string;
   match_type: string;
   elo_change: number;
-  target_score: number;
+}
+
+interface H2HSummary {
+  total: number;
+  p1Wins: number;
+  p2Wins: number;
 }
 
 export default function App() {
@@ -44,13 +55,14 @@ export default function App() {
   const [regName, setRegName] = useState<string>('');
   const [regHandicap, setRegHandicap] = useState<string>('');
 
-  // 경기 기록 상태
+  // 경기 기록 상태 (선수별 각각의 목표점수 입력 지원)
   const [matchFormat, setMatchFormat] = useState<string>('1:1');
   const [matchType, setMatchType] = useState<string>('승급전');
   const [gameType, setGameType] = useState<string>('4구');
-  const [targetScore, setTargetScore] = useState<string>('');
   const [winners, setWinners] = useState<string[]>(['']);
+  const [winnerTargetScores, setWinnerTargetScores] = useState<string[]>(['']);
   const [losers, setLosers] = useState<string[]>(['']);
+  const [loserTargetScores, setLoserTargetScores] = useState<string[]>(['']);
   const [password, setPassword] = useState<string>('');
 
   // 수정 모드 상태
@@ -59,6 +71,7 @@ export default function App() {
   // 상대 전적 상태
   const [h2hP1, setH2hP1] = useState<string>('');
   const [h2hP2, setH2hP2] = useState<string>('');
+  const [h2hSummary, setH2hSummary] = useState<H2HSummary | null>(null);
   const [h2hRecords, setH2hRecords] = useState<Match[]>([]);
 
   useEffect(() => {
@@ -116,12 +129,15 @@ export default function App() {
     const format = e.target.value;
     setMatchFormat(format);
     if (format === '1:1') {
-      setWinners(['']); setLosers(['']);
+      setWinners(['']); setWinnerTargetScores(['']);
+      setLosers(['']); setLoserTargetScores(['']);
     } else if (format === '2:2') {
-      setWinners(['', '']); setLosers(['', '']);
+      setWinners(['', '']); setWinnerTargetScores(['', '']);
+      setLosers(['', '']); setLoserTargetScores(['', '']);
       setMatchType('일반내기');
     } else if (format === '1:1:1') {
-      setWinners(['']); setLosers(['', '']);
+      setWinners(['']); setWinnerTargetScores(['']);
+      setLosers(['', '']); setLoserTargetScores(['', '']);
       setMatchType('일반내기');
     }
   };
@@ -141,7 +157,8 @@ export default function App() {
       game_type: gameType,
       match_format: matchFormat,
       match_type: matchType,
-      target_score: targetScore ? Number(targetScore) : 0,
+      winner_target_scores: winnerTargetScores.map(s => s ? Number(s) : 0),
+      loser_target_scores: loserTargetScores.map(s => s ? Number(s) : 0),
       password: password || '1234'
     };
 
@@ -165,8 +182,9 @@ export default function App() {
       if (data.success) {
         showToast(editingMatchId ? '전적이 수정되었습니다! ✏️' : '경기 결과가 저장되었습니다! 🏆');
         setWinners(winners.map(() => ''));
+        setWinnerTargetScores(winnerTargetScores.map(() => ''));
         setLosers(losers.map(() => ''));
-        setTargetScore('');
+        setLoserTargetScores(loserTargetScores.map(() => ''));
         setPassword('');
         setEditingMatchId(null);
         fetchData(uniCode);
@@ -183,18 +201,18 @@ export default function App() {
     setMatchFormat(m.match_format);
     setMatchType(m.match_type);
     setGameType(m.game_type);
-    setTargetScore(m.target_score ? m.target_score.toString() : '');
     setWinners(m.winner_ids.map(String));
+    setWinnerTargetScores(m.winners.map(w => w.target_score !== null ? w.target_score.toString() : ''));
     setLosers(m.loser_ids.map(String));
+    setLoserTargetScores(m.losers.map(l => l.target_score !== null ? l.target_score.toString() : ''));
     setActiveTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
     setEditingMatchId(null);
-    setWinners(['']);
-    setLosers(['']);
-    setTargetScore('');
+    setWinners(['']); setWinnerTargetScores(['']);
+    setLosers(['']); setLoserTargetScores(['']);
   };
 
   const handleUndo = async (matchId: number) => {
@@ -225,11 +243,17 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/${uniCode}/head-to-head?p1=${h2hP1}&p2=${h2hP2}`);
       const data = await res.json();
       if (data.success) {
+        setH2hSummary(data.summary);
         setH2hRecords(data.records);
       }
     } catch (err) {
       showToast('상대 전적 조회 오류');
     }
+  };
+
+  const getPlayerName = (id: string) => {
+    const p = players.find(item => item.id.toString() === id);
+    return p ? p.name : '선수';
   };
 
   if (!uniCode) {
@@ -287,32 +311,37 @@ export default function App() {
             )}
 
             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl mb-4 border border-gray-100 dark:border-gray-700">
-              <div className="text-sm font-bold text-blue-500 mb-2">👑 승리 선수 ({winners.length}명)</div>
+              <div className="text-sm font-bold text-blue-500 mb-2">👑 승리 선수 및 각각 몇 점 놓고 쳤는지</div>
               {winners.map((val, idx) => (
-                <select key={`w-${idx}`} className="w-full p-3 mb-2 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setWinners, winners, idx, e.target.value)}>
-                  <option value="">선수 선택</option>
-                  {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
-                </select>
+                <div key={`w-${idx}`} className="flex gap-2 mb-2">
+                  <select className="flex-[2] p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setWinners, winners, idx, e.target.value)}>
+                    <option value="">선수 선택</option>
+                    {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
+                  </select>
+                  <input type="number" placeholder="몇 점" className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={winnerTargetScores[idx] || ''} onChange={(e) => updateArray(setWinnerTargetScores, winnerTargetScores, idx, e.target.value)} />
+                </div>
               ))}
 
               <div className="text-center font-black text-gray-300 dark:text-gray-500 my-2">VS</div>
 
-              <div className="text-sm font-bold text-red-500 mb-2">💀 패배 선수 ({losers.length}명)</div>
+              <div className="text-sm font-bold text-red-500 mb-2">💀 패배 선수 및 각각 몇 점 놓고 쳤는지</div>
               {losers.map((val, idx) => (
-                <select key={`l-${idx}`} className="w-full p-3 mb-2 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setLosers, losers, idx, e.target.value)}>
-                  <option value="">선수 선택</option>
-                  {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
-                </select>
+                <div key={`l-${idx}`} className="flex gap-2 mb-2">
+                  <select className="flex-[2] p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setLosers, losers, idx, e.target.value)}>
+                    <option value="">선수 선택</option>
+                    {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
+                  </select>
+                  <input type="number" placeholder="몇 점" className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={loserTargetScores[idx] || ''} onChange={(e) => updateArray(setLoserTargetScores, loserTargetScores, idx, e.target.value)} />
+                </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <select className="col-span-1 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none w-full" value={gameType} onChange={(e) => setGameType(e.target.value)}>
+            <div className="mb-4">
+              <select className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none" value={gameType} onChange={(e) => setGameType(e.target.value)}>
                 <option value="4구">4구</option>
                 <option value="3쿠션">3쿠션</option>
                 <option value="포켓볼">포켓볼</option>
               </select>
-              <input type="number" placeholder="목표 점수 (예:150)" className="col-span-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none w-full placeholder:text-gray-400" value={targetScore} onChange={(e) => setTargetScore(e.target.value)} />
             </div>
 
             <div className="mb-4">
@@ -354,17 +383,20 @@ export default function App() {
               전적 검색
             </button>
 
-            {h2hRecords.length > 0 && (
+            {h2hSummary && (
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                <div className="text-xs text-gray-500 mb-2 font-medium">총 {h2hRecords.length}번의 맞대결 기록</div>
+                <div className="text-center bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl mb-3 font-bold text-sm">
+                  {getPlayerName(h2hP1)} <span className="text-blue-500">{h2hSummary.p1Wins}승</span> : <span className="text-red-500">{h2hSummary.p2Wins}패</span> {getPlayerName(h2hP2)}
+                  <span className="block text-xs font-normal text-gray-400 mt-1">총 {h2hSummary.total}전 상대 전적</span>
+                </div>
                 {h2hRecords.map(r => (
-                  <div key={r.id} className="py-2 text-sm flex justify-between items-center border-b border-gray-50 dark:border-gray-700/50 last:border-0">
-                    <div className="font-semibold text-xs">
-                      <span className="text-blue-500">{r.winner_names.join(', ')}</span> 승
-                      <span className="text-gray-300 mx-1.5">VS</span>
-                      <span className="text-red-500">{r.loser_names.join(', ')}</span> 패
+                  <div key={r.id} className="py-2.5 text-xs flex justify-between items-center border-b border-gray-50 dark:border-gray-700/50 last:border-0">
+                    <div>
+                      <span className="text-blue-500 font-semibold">{r.winners.map(w => `${w.name}(${w.target_score ? w.target_score + '점' : '-'})`).join(', ')}</span> 승
+                      <span className="text-gray-300 mx-1">VS</span>
+                      <span className="text-red-500 font-semibold">{r.losers.map(l => `${l.name}(${l.target_score ? l.target_score + '점' : '-'})`).join(', ')}</span> 패
                     </div>
-                    <div className="text-[11px] text-gray-400">{r.game_type} {r.target_score ? `(${r.target_score}점 게임)` : ''}</div>
+                    <div className="text-gray-400">{r.game_type}</div>
                   </div>
                 ))}
               </div>
@@ -408,21 +440,25 @@ export default function App() {
                 return (
                   <div key={m.id} className="py-4 border-b border-gray-50 dark:border-gray-700 last:border-0">
                     <div className="flex justify-between items-start mb-1">
-                      <div className="font-semibold text-sm">
-                        <span className="text-blue-500">{m.winner_names.join(', ')}</span> 승
-                        <span className="text-gray-300 mx-2 text-xs">VS</span>
-                        <span className="text-red-500">{m.loser_names.join(', ')}</span> 패
+                      <div className="font-semibold text-xs leading-relaxed">
+                        <span className="text-blue-500">
+                          {m.winners.map(w => `${w.name}(${w.target_score ? w.target_score + '점' : '-'})`).join(', ')}
+                        </span> 승
+                        <span className="text-gray-300 mx-1.5">VS</span>
+                        <span className="text-red-500">
+                          {m.losers.map(l => `${l.name}(${l.target_score ? l.target_score + '점' : '-'})`).join(', ')}
+                        </span> 패
                       </div>
                       {isRecent && (
-                        <div className="flex gap-1">
-                          <button onClick={() => startEditMatch(m)} className="text-xs bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded">수정</button>
-                          <button onClick={() => handleUndo(m.id)} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">취소</button>
+                        <div className="flex gap-1 shrink-0 ml-2">
+                          <button onClick={() => startEditMatch(m)} className="text-[11px] bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded">수정</button>
+                          <button onClick={() => handleUndo(m.id)} className="text-[11px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">취소</button>
                         </div>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-[11px] text-gray-400">
                       {new Date(m.match_date).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 
-                      <span className="mx-1">·</span> {m.game_type} {m.target_score ? `(${m.target_score}점 게임)` : ''} ({m.match_format}) 
+                      <span className="mx-1">·</span> {m.game_type} ({m.match_format}) 
                       <span className="mx-1">·</span> {m.match_type} {m.elo_change > 0 ? `(+${m.elo_change}점)` : ''}
                     </div>
                   </div>
