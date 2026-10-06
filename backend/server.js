@@ -62,10 +62,10 @@ app.post('/api/:university_code/players', async (req, res) => {
   }
 });
 
-// 3. 전적 기록 추가 (목표 점수 포함)
+// 3. 전적 기록 추가 (개별 선수별 목표 점수 포함)
 app.post('/api/:university_code/matches', async (req, res) => {
   const { university_code } = req.params;
-  const { winner_ids, loser_ids, game_type, match_format, match_type, target_score, password } = req.body;
+  const { winner_ids, loser_ids, game_type, match_format, match_type, winner_target_scores, loser_target_scores, password } = req.body;
   const ip_address = req.ip;
   const user_agent = req.headers['user-agent'];
 
@@ -99,9 +99,9 @@ app.post('/api/:university_code/matches', async (req, res) => {
     await client.query('UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])', [elo_change, loser_ids]);
 
     await client.query(
-      `INSERT INTO matches (university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, target_score, ip_address, user_agent) 
-       VALUES ($1, $2, $3, $4, $5::int[], $6::int[], $7, $8, $9, $10)`,
-      [university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, target_score || 0, ip_address, user_agent]
+      `INSERT INTO matches (university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_target_scores, loser_target_scores, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4, $5::int[], $6::int[], $7, $8::int[], $9::int[], $10, $11)`,
+      [university_code, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_target_scores || [], loser_target_scores || [], ip_address, user_agent]
     );
 
     await client.query('COMMIT');
@@ -157,7 +157,7 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
 // 4-1. 전적 수정 (10분 이내)
 app.put('/api/:university_code/matches/:id', async (req, res) => {
   const { university_code, id } = req.params;
-  const { winner_ids, loser_ids, game_type, match_format, match_type, target_score, password } = req.body;
+  const { winner_ids, loser_ids, game_type, match_format, match_type, winner_target_scores, loser_target_scores, password } = req.body;
 
   const client = await pool.connect();
   try {
@@ -194,8 +194,8 @@ app.put('/api/:university_code/matches/:id', async (req, res) => {
     await client.query('UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])', [elo_change, loser_ids]);
 
     await client.query(
-      `UPDATE matches SET game_type = $1, match_format = $2, match_type = $3, winner_ids = $4::int[], loser_ids = $5::int[], elo_change = $6, target_score = $7 WHERE id = $8`,
-      [game_type, match_format, match_type, winner_ids, loser_ids, elo_change, target_score || 0, id]
+      `UPDATE matches SET game_type = $1, match_format = $2, match_type = $3, winner_ids = $4::int[], loser_ids = $5::int[], elo_change = $6, winner_target_scores = $7::int[], loser_target_scores = $8::int[] WHERE id = $9`,
+      [game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_target_scores || [], loser_target_scores || [], id]
     );
 
     await client.query('COMMIT');
@@ -215,7 +215,7 @@ app.get('/api/:university_code/matches', async (req, res) => {
   const { university_code } = req.params;
   try {
     const matchRes = await pool.query(
-      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, target_score, match_date
+      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_target_scores, loser_target_scores, match_date
        FROM matches WHERE university_code = $1 AND is_deleted = FALSE
        ORDER BY match_date DESC LIMIT 50`,
       [university_code]
@@ -228,29 +228,37 @@ app.get('/api/:university_code/matches', async (req, res) => {
     
     const playerMap = {};
     playerRes.rows.forEach(p => {
-      playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
+      playerMap[p.id] = p.name;
     });
 
-    const matchesWithNames = matchRes.rows.map(m => ({
+    const matchesWithDetails = matchRes.rows.map(m => ({
       ...m,
-      winner_names: m.winner_ids.map(id => playerMap[id] || '알수없음'),
-      loser_names: m.loser_ids.map(id => playerMap[id] || '알수없음')
+      winners: m.winner_ids.map((id, idx) => ({
+        id,
+        name: playerMap[id] || '알수없음',
+        target_score: m.winner_target_scores?.[idx] ?? null
+      })),
+      losers: m.loser_ids.map((id, idx) => ({
+        id,
+        name: playerMap[id] || '알수없음',
+        target_score: m.loser_target_scores?.[idx] ?? null
+      }))
     }));
 
-    res.json({ success: true, matches: matchesWithNames });
+    res.json({ success: true, matches: matchesWithDetails });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: '전적을 불러오지 못했습니다.' });
   }
 });
 
-// 6. 상대 전적 조회 API
+// 6. 상대 전적 조회 API (몇 전 몇 승 몇 패 및 당시 점수 포함)
 app.get('/api/:university_code/head-to-head', async (req, res) => {
   const { university_code } = req.params;
   const { p1, p2 } = req.query;
   try {
     const matchRes = await pool.query(
-      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, target_score, match_date
+      `SELECT id, game_type, match_format, match_type, winner_ids, loser_ids, elo_change, winner_target_scores, loser_target_scores, match_date
        FROM matches 
        WHERE university_code = $1 AND is_deleted = FALSE 
        AND (
@@ -261,19 +269,44 @@ app.get('/api/:university_code/head-to-head', async (req, res) => {
       [university_code, p1, p2]
     );
 
-    const playerRes = await pool.query(`SELECT id, name, billiard_handicap FROM players WHERE university_code = $1`, [university_code]);
+    const playerRes = await pool.query(`SELECT id, name FROM players WHERE university_code = $1`, [university_code]);
     const playerMap = {};
     playerRes.rows.forEach(p => {
-      playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
+      playerMap[p.id] = p.name;
     });
 
-    const records = matchRes.rows.map(m => ({
-      ...m,
-      winner_names: m.winner_ids.map(id => playerMap[id] || '알수없음'),
-      loser_names: m.loser_ids.map(id => playerMap[id] || '알수없음')
-    }));
+    let p1Wins = 0;
+    let p2Wins = 0;
 
-    res.json({ success: true, records });
+    const records = matchRes.rows.map(m => {
+      const isP1Winner = m.winner_ids.includes(Number(p1));
+      if (isP1Winner) p1Wins++;
+      else p2Wins++;
+
+      return {
+        ...m,
+        winners: m.winner_ids.map((id, idx) => ({
+          id,
+          name: playerMap[id] || '알수없음',
+          target_score: m.winner_target_scores?.[idx] ?? null
+        })),
+        losers: m.loser_ids.map((id, idx) => ({
+          id,
+          name: playerMap[id] || '알수없음',
+          target_score: m.loser_target_scores?.[idx] ?? null
+        }))
+      };
+    });
+
+    res.json({ 
+      success: true, 
+      summary: {
+        total: records.length,
+        p1Wins,
+        p2Wins
+      },
+      records 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: '상대 전적을 불러오지 못했습니다.' });
