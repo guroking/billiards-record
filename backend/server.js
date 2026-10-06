@@ -103,7 +103,7 @@ app.post('/api/:university_code/matches', async (req, res) => {
     await client.query('COMMIT');
     res.json({ success: true, message: '전적이 성공적으로 기록되었습니다.' });
 
-  } catch (err: any) {
+  } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
     if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
@@ -140,7 +140,7 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     await client.query('ROLLBACK');
     if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
     if (err.message === 'CANNOT_UNDO') return res.status(400).json({ success: false, error: '취소 기한(10분)이 지났거나 없는 기록입니다.' });
@@ -199,7 +199,7 @@ app.put('/api/:university_code/matches/:id', async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     await client.query('ROLLBACK');
     if (err.message === 'WRONG_PASSWORD') return res.status(401).json({ success: false, error: '비밀번호가 틀렸습니다.' });
     if (err.message === 'CANNOT_EDIT') return res.status(400).json({ success: false, error: '수정 기한(10분)이 지났거나 없는 기록입니다.' });
@@ -225,18 +225,18 @@ app.get('/api/:university_code/matches', async (req, res) => {
       [university_code]
     );
     
-    const playerMap: Record<number, string> = {};
+    const playerMap = {};
     playerRes.rows.forEach(p => {
       playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
     });
 
     const matchesWithDetails = matchRes.rows.map(m => ({
       ...m,
-      winners: m.winner_ids.map((id: number, idx: number) => ({
+      winners: m.winner_ids.map((id, idx) => ({
         name: playerMap[id] || '알수없음',
         score: m.winner_scores?.[idx] ?? null
       })),
-      losers: m.loser_ids.map((id: number, idx: number) => ({
+      losers: m.loser_ids.map((id, idx) => ({
         name: playerMap[id] || '알수없음',
         score: m.loser_scores?.[idx] ?? null
       }))
@@ -267,18 +267,18 @@ app.get('/api/:university_code/head-to-head', async (req, res) => {
     );
 
     const playerRes = await pool.query(`SELECT id, name, billiard_handicap FROM players WHERE university_code = $1`, [university_code]);
-    const playerMap: Record<number, string> = {};
+    const playerMap = {};
     playerRes.rows.forEach(p => {
       playerMap[p.id] = p.billiard_handicap ? `${p.name}(${p.billiard_handicap})` : p.name;
     });
 
     const records = matchRes.rows.map(m => ({
       ...m,
-      winners: m.winner_ids.map((id: number, idx: number) => ({
+      winners: m.winner_ids.map((id, idx) => ({
         name: playerMap[id] || '알수없음',
         score: m.winner_scores?.[idx] ?? null
       })),
-      losers: m.loser_ids.map((id: number, idx: number) => ({
+      losers: m.loser_ids.map((id, idx) => ({
         name: playerMap[id] || '알수없음',
         score: m.loser_scores?.[idx] ?? null
       }))
