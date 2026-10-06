@@ -85,11 +85,11 @@ app.post('/api/:university_code/matches', async (req, res) => {
     if (match_format === '1:1' && match_type === '승급전') {
       const wId = winner_ids[0];
       const lId = loser_ids[0];
-      
+
       const playersRes = await client.query('SELECT id, score FROM players WHERE id = ANY($1::int[])', [[wId, lId]]);
       const winner = playersRes.rows.find(p => p.id === wId);
       const loser = playersRes.rows.find(p => p.id === lId);
-      
+
       if (!winner || !loser) throw new Error('PLAYER_NOT_FOUND');
 
       const K = 32;
@@ -102,7 +102,7 @@ app.post('/api/:university_code/matches', async (req, res) => {
       'UPDATE players SET score = score + $1, wins = wins + 1 WHERE id = ANY($2::int[])',
       [elo_change, winner_ids]
     );
-    
+
     // 패자들 업데이트 (점수 차감 및 패수 추가)
     await client.query(
       'UPDATE players SET score = score - $1, losses = losses + 1 WHERE id = ANY($2::int[])',
@@ -138,7 +138,7 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     const isMatch = await verifyPassword(university_code, password);
     if (!isMatch) throw new Error('WRONG_PASSWORD');
 
@@ -155,7 +155,7 @@ app.delete('/api/:university_code/matches/:id', async (req, res) => {
     // 배열 형태의 승자/패자 기록을 원상복구
     await client.query('UPDATE players SET score = score - $1, wins = wins - 1 WHERE id = ANY($2::int[])', [match.elo_change, match.winner_ids]);
     await client.query('UPDATE players SET score = score + $1, losses = losses - 1 WHERE id = ANY($2::int[])', [match.elo_change, match.loser_ids]);
-    
+
     await client.query('UPDATE matches SET is_deleted = TRUE WHERE id = $1', [id]);
 
     await client.query('COMMIT');
@@ -181,13 +181,13 @@ app.get('/api/:university_code/matches', async (req, res) => {
        ORDER BY match_date DESC LIMIT 50`,
       [university_code]
     );
-    
+
     // 2) 매치에 이름(이름, 수지)을 매핑하기 위해 해당 대학의 모든 선수 조회
     const playerRes = await pool.query(
       `SELECT id, name, billiard_handicap FROM players WHERE university_code = $1`,
       [university_code]
     );
-    
+
     const playerMap = {};
     playerRes.rows.forEach(p => {
       // 수지가 있으면 '이름 (수지)' 형태로 매핑
@@ -210,7 +210,7 @@ app.get('/api/:university_code/matches', async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
