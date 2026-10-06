@@ -19,22 +19,18 @@ interface Player {
   losses: number;
 }
 
-interface PlayerScoreDetail {
-  name: string;
-  score: number | null;
-}
-
 interface Match {
   id: number;
   winner_ids: number[];
   loser_ids: number[];
-  winners: PlayerScoreDetail[];
-  losers: PlayerScoreDetail[];
+  winner_names: string[];
+  loser_names: string[];
   match_date: string;
   game_type: string;
   match_format: string;
   match_type: string;
   elo_change: number;
+  target_score: number;
 }
 
 export default function App() {
@@ -52,10 +48,9 @@ export default function App() {
   const [matchFormat, setMatchFormat] = useState<string>('1:1');
   const [matchType, setMatchType] = useState<string>('승급전');
   const [gameType, setGameType] = useState<string>('4구');
+  const [targetScore, setTargetScore] = useState<string>('');
   const [winners, setWinners] = useState<string[]>(['']);
-  const [winnerScores, setWinnerScores] = useState<string[]>(['']);
   const [losers, setLosers] = useState<string[]>(['']);
-  const [loserScores, setLoserScores] = useState<string[]>(['']);
   const [password, setPassword] = useState<string>('');
 
   // 수정 모드 상태
@@ -121,15 +116,12 @@ export default function App() {
     const format = e.target.value;
     setMatchFormat(format);
     if (format === '1:1') {
-      setWinners(['']); setWinnerScores(['']);
-      setLosers(['']); setLoserScores(['']);
+      setWinners(['']); setLosers(['']);
     } else if (format === '2:2') {
-      setWinners(['', '']); setWinnerScores(['', '']);
-      setLosers(['', '']); setLoserScores(['', '']);
+      setWinners(['', '']); setLosers(['', '']);
       setMatchType('일반내기');
     } else if (format === '1:1:1') {
-      setWinners(['']); setWinnerScores(['']);
-      setLosers(['', '']); setLoserScores(['', '']);
+      setWinners(['']); setLosers(['', '']);
       setMatchType('일반내기');
     }
   };
@@ -149,8 +141,7 @@ export default function App() {
       game_type: gameType,
       match_format: matchFormat,
       match_type: matchType,
-      winner_scores: winnerScores.map(s => s ? Number(s) : 0),
-      loser_scores: loserScores.map(s => s ? Number(s) : 0),
+      target_score: targetScore ? Number(targetScore) : 0,
       password: password || '1234'
     };
 
@@ -174,9 +165,8 @@ export default function App() {
       if (data.success) {
         showToast(editingMatchId ? '전적이 수정되었습니다! ✏️' : '경기 결과가 저장되었습니다! 🏆');
         setWinners(winners.map(() => ''));
-        setWinnerScores(winnerScores.map(() => ''));
         setLosers(losers.map(() => ''));
-        setLoserScores(loserScores.map(() => ''));
+        setTargetScore('');
         setPassword('');
         setEditingMatchId(null);
         fetchData(uniCode);
@@ -193,18 +183,18 @@ export default function App() {
     setMatchFormat(m.match_format);
     setMatchType(m.match_type);
     setGameType(m.game_type);
+    setTargetScore(m.target_score ? m.target_score.toString() : '');
     setWinners(m.winner_ids.map(String));
-    setWinnerScores(m.winners.map(w => w.score !== null ? w.score.toString() : ''));
     setLosers(m.loser_ids.map(String));
-    setLoserScores(m.losers.map(l => l.score !== null ? l.score.toString() : ''));
     setActiveTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
     setEditingMatchId(null);
-    setWinners(['']); setWinnerScores(['']);
-    setLosers(['']); setLoserScores(['']);
+    setWinners(['']);
+    setLosers(['']);
+    setTargetScore('');
   };
 
   const handleUndo = async (matchId: number) => {
@@ -297,37 +287,32 @@ export default function App() {
             )}
 
             <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl mb-4 border border-gray-100 dark:border-gray-700">
-              <div className="text-sm font-bold text-blue-500 mb-2">👑 승리 선수 및 득점</div>
+              <div className="text-sm font-bold text-blue-500 mb-2">👑 승리 선수 ({winners.length}명)</div>
               {winners.map((val, idx) => (
-                <div key={`w-${idx}`} className="flex gap-2 mb-2">
-                  <select className="flex-[2] p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setWinners, winners, idx, e.target.value)}>
-                    <option value="">승리 선수 선택</option>
-                    {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
-                  </select>
-                  <input type="number" placeholder="득점" className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={winnerScores[idx] || ''} onChange={(e) => updateArray(setWinnerScores, winnerScores, idx, e.target.value)} />
-                </div>
+                <select key={`w-${idx}`} className="w-full p-3 mb-2 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setWinners, winners, idx, e.target.value)}>
+                  <option value="">선수 선택</option>
+                  {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
+                </select>
               ))}
 
               <div className="text-center font-black text-gray-300 dark:text-gray-500 my-2">VS</div>
 
-              <div className="text-sm font-bold text-red-500 mb-2">💀 패배 선수 및 득점</div>
+              <div className="text-sm font-bold text-red-500 mb-2">💀 패배 선수 ({losers.length}명)</div>
               {losers.map((val, idx) => (
-                <div key={`l-${idx}`} className="flex gap-2 mb-2">
-                  <select className="flex-[2] p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setLosers, losers, idx, e.target.value)}>
-                    <option value="">패배 선수 선택</option>
-                    {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
-                  </select>
-                  <input type="number" placeholder="득점" className="flex-1 p-3 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={loserScores[idx] || ''} onChange={(e) => updateArray(setLoserScores, loserScores, idx, e.target.value)} />
-                </div>
+                <select key={`l-${idx}`} className="w-full p-3 mb-2 bg-white dark:bg-gray-800 rounded-xl outline-none text-sm" value={val} onChange={(e) => updateArray(setLosers, losers, idx, e.target.value)}>
+                  <option value="">선수 선택</option>
+                  {players.map(p => <option key={p.id} value={p.id.toString()}>{p.name} {p.billiard_handicap && `(${p.billiard_handicap})`}</option>)}
+                </select>
               ))}
             </div>
 
-            <div className="mb-4">
-              <select className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none" value={gameType} onChange={(e) => setGameType(e.target.value)}>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <select className="col-span-1 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none w-full" value={gameType} onChange={(e) => setGameType(e.target.value)}>
                 <option value="4구">4구</option>
                 <option value="3쿠션">3쿠션</option>
                 <option value="포켓볼">포켓볼</option>
               </select>
+              <input type="number" placeholder="목표 점수 (예:150)" className="col-span-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none w-full placeholder:text-gray-400" value={targetScore} onChange={(e) => setTargetScore(e.target.value)} />
             </div>
 
             <div className="mb-4">
@@ -375,11 +360,11 @@ export default function App() {
                 {h2hRecords.map(r => (
                   <div key={r.id} className="py-2 text-sm flex justify-between items-center border-b border-gray-50 dark:border-gray-700/50 last:border-0">
                     <div className="font-semibold text-xs">
-                      <span className="text-blue-500">{r.winners.map(w => `${w.name}${w.score !== null ? `(${w.score})` : ''}`).join(', ')}</span> 승
+                      <span className="text-blue-500">{r.winner_names.join(', ')}</span> 승
                       <span className="text-gray-300 mx-1.5">VS</span>
-                      <span className="text-red-500">{r.losers.map(l => `${l.name}${l.score !== null ? `(${l.score})` : ''}`).join(', ')}</span> 패
+                      <span className="text-red-500">{r.loser_names.join(', ')}</span> 패
                     </div>
-                    <div className="text-[11px] text-gray-400">{r.game_type}</div>
+                    <div className="text-[11px] text-gray-400">{r.game_type} {r.target_score ? `(${r.target_score}점 게임)` : ''}</div>
                   </div>
                 ))}
               </div>
@@ -424,13 +409,9 @@ export default function App() {
                   <div key={m.id} className="py-4 border-b border-gray-50 dark:border-gray-700 last:border-0">
                     <div className="flex justify-between items-start mb-1">
                       <div className="font-semibold text-sm">
-                        <span className="text-blue-500">
-                          {m.winners.map(w => `${w.name}${w.score !== null ? `(${w.score})` : ''}`).join(', ')}
-                        </span> 승
+                        <span className="text-blue-500">{m.winner_names.join(', ')}</span> 승
                         <span className="text-gray-300 mx-2 text-xs">VS</span>
-                        <span className="text-red-500">
-                          {m.losers.map(l => `${l.name}${l.score !== null ? `(${l.score})` : ''}`).join(', ')}
-                        </span> 패
+                        <span className="text-red-500">{m.loser_names.join(', ')}</span> 패
                       </div>
                       {isRecent && (
                         <div className="flex gap-1">
@@ -441,7 +422,7 @@ export default function App() {
                     </div>
                     <div className="text-xs text-gray-500">
                       {new Date(m.match_date).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 
-                      <span className="mx-1">·</span> {m.game_type} ({m.match_format}) 
+                      <span className="mx-1">·</span> {m.game_type} {m.target_score ? `(${m.target_score}점 게임)` : ''} ({m.match_format}) 
                       <span className="mx-1">·</span> {m.match_type} {m.elo_change > 0 ? `(+${m.elo_change}점)` : ''}
                     </div>
                   </div>
