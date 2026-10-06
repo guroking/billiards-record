@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>당구 전적판</title>
-    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/variable/pretendardvariable.css" />
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/variable/pretendardvariable.css" />
     <style>
         :root {
             /* 라이트 모드 (기본) */
@@ -43,89 +45,314 @@
             }
         }
 
-        body { 
-            font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif; 
-            background-color: var(--bg-color); 
-            color: var(--text-primary); 
-            margin: 0; 
+        body {
+            font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
             padding: 0;
             padding-bottom: 80px;
         }
-        
-        .app-container { max-width: 480px; margin: 0 auto; background-color: var(--bg-color); min-height: 100vh; position: relative; }
 
-        .header { padding: 24px 20px 10px; display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
-        .back-btn { color: var(--text-secondary); text-decoration: none; font-size: 14px; font-weight: 500; }
-
-        .card { background: var(--card-bg); border-radius: var(--border-radius); padding: 24px; margin: 16px 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
-        .card h3 { margin: 0 0 20px 0; font-size: 18px; font-weight: 700; }
-        
-        input, select { 
-            background-color: var(--input-bg); border: none; border-radius: 12px; 
-            padding: 16px; font-size: 15px; width: 100%; box-sizing: border-box; 
-            font-family: inherit; color: var(--text-primary); outline: none; margin-bottom: 16px;
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: var(--bg-color);
+            min-height: 100vh;
+            position: relative;
         }
-        button { 
-            background-color: var(--primary-blue); color: white; border: none; border-radius: 12px; 
-            padding: 16px; font-size: 16px; font-weight: 600; width: 100%; cursor: pointer; 
+
+        .header {
+            padding: 24px 20px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .back-btn {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            margin: 16px 20px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+        }
+
+        .card h3 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        input,
+        select {
+            background-color: var(--input-bg);
+            border: none;
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 15px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: inherit;
+            color: var(--text-primary);
+            outline: none;
+            margin-bottom: 16px;
+        }
+
+        button {
+            background-color: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
             transition: background-color 0.2s;
         }
-        button:active { background-color: #1b64da; }
-        button.outline { background-color: transparent; border: 1px solid var(--primary-blue); color: var(--primary-blue); }
 
-        .match-input-container { 
-            display: flex; align-items: center; justify-content: space-between; 
-            background: var(--match-box-bg); padding: 16px; border-radius: 16px; margin-bottom: 16px; border: 1px solid var(--match-box-border);
+        button:active {
+            background-color: #1b64da;
         }
-        .player-select { flex: 1; display: flex; flex-direction: column; text-align: center; }
-        .player-select .label { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
-        .winner-label { color: var(--primary-blue); }
-        .loser-label { color: var(--primary-red); }
-        .player-select select { padding: 12px; font-size: 14px; margin-bottom: 0; text-align: center; }
-        .vs-badge { font-weight: 800; color: var(--vs-color); font-size: 14px; padding: 0 12px; margin-top: 24px; }
-        
-        .input-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; margin-left: 4px; }
 
-        .bottom-nav { 
-            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); 
-            width: 100%; max-width: 480px; background: var(--nav-bg); 
-            backdrop-filter: blur(10px); display: flex; justify-content: space-around; 
-            padding: 12px 0 20px 0; box-shadow: 0 -1px 0 var(--nav-shadow); z-index: 100;
+        button.outline {
+            background-color: transparent;
+            border: 1px solid var(--primary-blue);
+            color: var(--primary-blue);
         }
-        .nav-item { text-align: center; color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: pointer; flex: 1; }
-        .nav-item.active { color: var(--text-primary); }
-        .nav-icon { font-size: 24px; margin-bottom: 4px; display: block; opacity: 0.4; }
-        .nav-item.active .nav-icon { opacity: 1; }
 
-        .tab-content { display: none; animation: fadeIn 0.3s ease; }
-        .tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        .list-row { display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border-color); }
-        .list-row:last-child { border-bottom: none; }
-        .rank-num { font-size: 16px; font-weight: 700; width: 30px; color: var(--text-secondary); }
-        .rank-num.top1 { color: #F5A623; } .rank-num.top2 { color: #A0A5AA; } .rank-num.top3 { color: #C28F5B; }
-        .player-info { flex: 1; }
-        .player-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-        .player-stats { font-size: 13px; color: var(--text-secondary); }
-        .player-score { font-size: 18px; font-weight: 700; color: var(--primary-blue); }
-        
-        .match-info { flex: 1; }
-        .match-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-        .match-winner { color: var(--primary-blue); }
-        .match-loser { color: var(--primary-red); }
-        .match-date { font-size: 12px; color: var(--text-secondary); }
-        
-        #toast { 
-            visibility: hidden; min-width: 200px; background-color: #333; color: #fff; 
-            text-align: center; border-radius: 20px; padding: 12px 24px; font-size: 14px;
-            position: fixed; z-index: 1000; left: 50%; bottom: 90px; transform: translateX(-50%);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transition: opacity 0.3s, bottom 0.3s;
+        .match-input-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--match-box-bg);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--match-box-border);
         }
-        #toast.show { visibility: visible; opacity: 1; bottom: 100px; }
+
+        .player-select {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .player-select .label {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .winner-label {
+            color: var(--primary-blue);
+        }
+
+        .loser-label {
+            color: var(--primary-red);
+        }
+
+        .player-select select {
+            padding: 12px;
+            font-size: 14px;
+            margin-bottom: 0;
+            text-align: center;
+        }
+
+        .vs-badge {
+            font-weight: 800;
+            color: var(--vs-color);
+            font-size: 14px;
+            padding: 0 12px;
+            margin-top: 24px;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            margin-left: 4px;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            background: var(--nav-bg);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0 20px 0;
+            box-shadow: 0 -1px 0 var(--nav-shadow);
+            z-index: 100;
+        }
+
+        .nav-item {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .nav-item.active {
+            color: var(--text-primary);
+        }
+
+        .nav-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+            display: block;
+            opacity: 0.4;
+        }
+
+        .nav-item.active .nav-icon {
+            opacity: 1;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .list-row {
+            display: flex;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .list-row:last-child {
+            border-bottom: none;
+        }
+
+        .rank-num {
+            font-size: 16px;
+            font-weight: 700;
+            width: 30px;
+            color: var(--text-secondary);
+        }
+
+        .rank-num.top1 {
+            color: #F5A623;
+        }
+
+        .rank-num.top2 {
+            color: #A0A5AA;
+        }
+
+        .rank-num.top3 {
+            color: #C28F5B;
+        }
+
+        .player-info {
+            flex: 1;
+        }
+
+        .player-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .player-stats {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .player-score {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+
+        .match-info {
+            flex: 1;
+        }
+
+        .match-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .match-winner {
+            color: var(--primary-blue);
+        }
+
+        .match-loser {
+            color: var(--primary-red);
+        }
+
+        .match-date {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        #toast {
+            visibility: hidden;
+            min-width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 20px;
+            padding: 12px 24px;
+            font-size: 14px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 90px;
+            transform: translateX(-50%);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transition: opacity 0.3s, bottom 0.3s;
+        }
+
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            bottom: 100px;
+        }
     </style>
 </head>
+
 <body>
     <div class="app-container">
         <div class="header">
@@ -139,12 +366,16 @@
                 <div class="match-input-container">
                     <div class="player-select">
                         <span class="label winner-label">👑 승리 선수</span>
-                        <select id="winnerSelect"><option value="">선택</option></select>
+                        <select id="winnerSelect">
+                            <option value="">선택</option>
+                        </select>
                     </div>
                     <div class="vs-badge">VS</div>
                     <div class="player-select">
                         <span class="label loser-label">💀 패배 선수</span>
-                        <select id="loserSelect"><option value="">선택</option></select>
+                        <select id="loserSelect">
+                            <option value="">선택</option>
+                        </select>
                     </div>
                 </div>
 
@@ -157,7 +388,7 @@
 
                 <span class="input-label">기록용 비밀번호</span>
                 <input type="password" id="matchPassword" placeholder="학교 공용 비밀번호 (기본: 1234)">
-                
+
                 <button onclick="recordMatch()">결과 저장하기</button>
             </div>
 
@@ -199,7 +430,7 @@
     </div>
 
     <script>
-        const uniNames = { 'kmou': '한국해양대', 'dmu': '동양미래대', 'yuhan': '유한대', 'dankook': '단국대', 'cbnu': '충북대' };
+        const uniNames = { 'mmu': '목포해양대', 'dmu': '동양미래대', 'yuhan': '유한대', 'dankook': '단국대', 'cbnu': '충북대' };
         const urlParams = new URLSearchParams(window.location.search);
         const uniCode = urlParams.get('uni');
 
@@ -217,9 +448,9 @@
             document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             el.classList.add('active');
-            
-            if(tabId === 'tab-ranking') loadPlayers();
-            if(tabId === 'tab-history') loadMatches();
+
+            if (tabId === 'tab-ranking') loadPlayers();
+            if (tabId === 'tab-history') loadMatches();
         }
 
         function showToast(msg) {
@@ -300,7 +531,7 @@
             const wSelect = document.getElementById('winnerSelect');
             const lSelect = document.getElementById('loserSelect');
             let html = '<option value="">선수 선택</option>';
-            [...players].sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+            [...players].sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
                 html += `<option value="${p.id}">${p.name}</option>`;
             });
             wSelect.innerHTML = html;
@@ -333,7 +564,7 @@
 
             list.innerHTML = matches.map(m => {
                 const d = new Date(m.match_date);
-                const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const dateStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
                 return `
                     <div class="list-row">
                         <div class="match-info">
@@ -348,4 +579,5 @@
         }
     </script>
 </body>
+
 </html>
