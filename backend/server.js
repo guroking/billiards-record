@@ -17,14 +17,37 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// 🛠 데이터베이스 컬럼 자동 동기화 함수
+// 🛠 데이터베이스 스키마 및 기본 학교 자동 동기화
 async function ensureDatabaseColumns() {
   try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS universities (code VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL, shared_password VARCHAR(255) NOT NULL);`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS players (id SERIAL PRIMARY KEY, university_code VARCHAR(50) REFERENCES universities(code) ON DELETE CASCADE, name VARCHAR(100) NOT NULL, billiard_handicap INT, score INT DEFAULT 1000, wins INT DEFAULT 0, losses INT DEFAULT 0, UNIQUE(university_code, name));`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS matches (id SERIAL PRIMARY KEY, university_code VARCHAR(50) REFERENCES universities(code) ON DELETE CASCADE, game_type VARCHAR(50) NOT NULL, match_format VARCHAR(20) NOT NULL, match_type VARCHAR(50) NOT NULL, winner_ids INT[] NOT NULL, loser_ids INT[] NOT NULL, elo_change INT DEFAULT 0, winner_target_scores INT[] DEFAULT ARRAY[]::INT[], loser_target_scores INT[] DEFAULT ARRAY[]::INT[], is_deleted BOOLEAN DEFAULT FALSE, match_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ip_address VARCHAR(50), user_agent TEXT);`);
+    
     await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS winner_target_scores INT[] DEFAULT ARRAY[]::INT[];`);
     await pool.query(`ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_target_scores INT[] DEFAULT ARRAY[]::INT[];`);
-    console.log('✅ 데이터베이스 스키마 자동 동기화 완료');
+
+    // 기본 학교들 자동 등록 (경남대 포함)
+    const defaultPass = await bcrypt.hash('1234', 10);
+    const defaultUnis = [
+      ['kyungnam', '경남대'],
+      ['mmu', '목포해양대'],
+      ['dmu', '동양미래대'],
+      ['yuhan', '유한대'],
+      ['dankook', '단국대'],
+      ['cbnu', '충북대']
+    ];
+
+    for (const [code, name] of defaultUnis) {
+      await pool.query(
+        `INSERT INTO universities (code, name, shared_password) VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING;`,
+        [code, name, defaultPass]
+      );
+    }
+
+    console.log('✅ 데이터베이스 스키마 및 기본 학교 동기화 완료');
   } catch (err) {
-    console.error('⚠️ 스키마 자동 동기화 중 오류 발생:', err.message);
+    console.error('⚠️ 스키마 동기화 중 오류 발생:', err.message);
   }
 }
 
@@ -37,6 +60,41 @@ async function verifyPassword(university_code, plainPassword) {
   if (result.rows.length === 0) return false;
   return await bcrypt.compare(plainPassword, result.rows[0].shared_password);
 }
+
+// 0-1. 등록된 학교 목록 조회 API
+app.get('/api/universities', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT code, name FROM universities ORDER BY name');
+    res.json({ success: true, universities: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: '학교 목록을 불러오지 못했습니다.' });
+  }
+});
+
+// 0-2. 새로운 학교 직접 추가 API
+app.post('/api/universities', async (req, res) => {
+  const { code, name, password } = req.body;
+  if (!code || !name || !password) {
+    return res.status(400).json({ success: false, error: '모든 항목을 입력해주세요.' });
+  }
+
+  try {
+    const cleanCode = code.toLowerCase().trim().replace(/[^a-z0-9_]/g, '');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await pool.query(
+      'INSERT INTO universities (code, name, shared_password) VALUES ($1, $2, $3)',
+      [cleanCode, name.trim(), hashedPassword]
+    );
+    res.json({ success: true, message: '학교가 성공적으로 생성되었습니다!' });
+  } catch (err) {
+    console.error(err);
+    if (err.code === '23505') {
+      return res.status(400).json({ success: false, error: '이미 존재하는 학교 코드입니다.' });
+    }
+    res.status(500).json({ success: false, error: '학교 등록에 실패했습니다.' });
+  }
+});
 
 // 1. 선수 목록 불러오기
 app.get('/api/:university_code/players', async (req, res) => {
@@ -328,7 +386,6 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
-// 🚀 데이터베이스 테이블 생성이 끝난 후에만 서버가 요청을 받도록 설정 (핵심 수정)
 async function startServer() {
   await ensureDatabaseColumns();
   app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));

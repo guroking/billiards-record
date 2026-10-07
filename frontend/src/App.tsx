@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3000' : '';
 
-const UNI_NAMES: Record<string, string> = {
-  mmu: '목포해양대',
-  dmu: '동양미래대',
-  yuhan: '유한대',
-  dankook: '단국대',
-  cbnu: '충북대'
-};
+interface University {
+  code: string;
+  name: string;
+}
 
 interface Player {
   id: number;
@@ -46,6 +43,15 @@ interface H2HSummary {
 
 export default function App() {
   const [uniCode, setUniCode] = useState<string>('');
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [selectedUniCode, setSelectedUniCode] = useState<string>('kyungnam');
+  
+  // 학교 직접 추가 모달/폼 상태
+  const [showAddUniForm, setShowAddUniForm] = useState<boolean>(false);
+  const [newUniCode, setNewUniCode] = useState<string>('');
+  const [newUniName, setNewUniName] = useState<string>('');
+  const [newUniPassword, setNewUniPassword] = useState<string>('1234');
+
   const [activeTab, setActiveTab] = useState<string>('home');
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -55,7 +61,7 @@ export default function App() {
   const [regName, setRegName] = useState<string>('');
   const [regHandicap, setRegHandicap] = useState<string>('');
 
-  // 경기 기록 상태 (선수별 각각의 목표점수 입력 지원)
+  // 경기 기록 상태
   const [matchFormat, setMatchFormat] = useState<string>('1:1');
   const [matchType, setMatchType] = useState<string>('승급전');
   const [gameType, setGameType] = useState<string>('4구');
@@ -75,13 +81,26 @@ export default function App() {
   const [h2hRecords, setH2hRecords] = useState<Match[]>([]);
 
   useEffect(() => {
+    fetchUniversities();
     const params = new URLSearchParams(window.location.search);
     const uni = params.get('uni');
-    if (uni && UNI_NAMES[uni]) {
+    if (uni) {
       setUniCode(uni);
       fetchData(uni);
     }
   }, []);
+
+  const fetchUniversities = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/universities`);
+      const data = await res.json();
+      if (data.success) {
+        setUniversities(data.universities);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToast({ visible: true, message: msg });
@@ -100,6 +119,31 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast('데이터를 불러오지 못했습니다.');
+    }
+  };
+
+  const handleRegisterUni = async () => {
+    if (!newUniCode.trim() || !newUniName.trim()) {
+      return showToast('학교 코드와 이름을 모두 입력해주세요.');
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/universities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: newUniCode, name: newUniName, password: newUniPassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('새로운 학교가 등록되었습니다! 🏫');
+        setNewUniCode('');
+        setNewUniName('');
+        setShowAddUniForm(false);
+        fetchUniversities();
+      } else {
+        showToast(data.error);
+      }
+    } catch (err) {
+      showToast('서버 통신 오류');
     }
   };
 
@@ -256,19 +300,43 @@ export default function App() {
     return p ? p.name : '선수';
   };
 
+  const currentUniName = universities.find(u => u.code === uniCode)?.name || '당구 전적판';
+
   if (!uniCode) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-sm w-full max-w-sm text-center">
           <h1 className="text-2xl font-bold mb-6 text-gray-900">🎱 당구 전적판</h1>
-          <select className="w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none" id="uni-select">
-            {Object.entries(UNI_NAMES).map(([code, name]) => (
-              <option key={code} value={code}>{name}</option>
-            ))}
-          </select>
-          <button className="w-full bg-blue-500 text-white font-bold p-4 rounded-xl active:bg-blue-600 transition" onClick={() => window.location.href = `/?uni=${(document.getElementById('uni-select') as HTMLSelectElement).value}`}>
-            입장하기
-          </button>
+          
+          {!showAddUniForm ? (
+            <>
+              <select className="w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-xl outline-none" value={selectedUniCode} onChange={(e) => setSelectedUniCode(e.target.value)}>
+                {universities.map(u => (
+                  <option key={u.code} value={u.code}>{u.name}</option>
+                ))}
+              </select>
+              <button className="w-full bg-blue-500 text-white font-bold p-4 rounded-xl active:bg-blue-600 transition mb-3" onClick={() => window.location.href = `/?uni=${selectedUniCode}`}>
+                입장하기
+              </button>
+              <button className="w-full text-xs text-gray-500 hover:text-gray-700 py-2" onClick={() => setShowAddUniForm(true)}>
+                ➕ 우리 학교가 없다면? 직접 추가하기
+              </button>
+            </>
+          ) : (
+            <div className="text-left">
+              <h3 className="font-bold text-sm mb-3 text-blue-600">🏫 새로운 학교 등록</h3>
+              <input type="text" placeholder="영어 코드 (예: kyungnam)" className="w-full p-3 mb-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none" value={newUniCode} onChange={(e) => setNewUniCode(e.target.value)} />
+              <input type="text" placeholder="학교 이름 (예: 경남대학교)" className="w-full p-3 mb-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none" value={newUniName} onChange={(e) => setNewUniName(e.target.value)} />
+              <input type="password" placeholder="공용 비밀번호 설정 (기본: 1234)" className="w-full p-3 mb-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none" value={newUniPassword} onChange={(e) => setNewUniPassword(e.target.value)} />
+              
+              <button className="w-full bg-blue-500 text-white font-bold p-3 rounded-xl text-sm active:bg-blue-600 transition mb-2" onClick={handleRegisterUni}>
+                학교 등록 및 입장하기
+              </button>
+              <button className="w-full text-xs text-gray-400 py-1 text-center" onClick={() => setShowAddUniForm(false)}>
+                취소하고 돌아가기
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -277,7 +345,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 pb-24 font-sans">
       <header className="p-6 flex justify-between items-center sticky top-0 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md z-10">
-        <h1 className="text-2xl font-bold tracking-tight">{UNI_NAMES[uniCode]} 전적판</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{currentUniName} 전적판</h1>
         <a href="/" className="text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400">학교 변경</a>
       </header>
 
